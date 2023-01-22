@@ -43,4 +43,4 @@ The nodes should now be fully connected!
 
 You can send data in either direction. The data can be any edn data structure.
 
-That's all this library does!
+NOTE: This library is completely untested and probably broken, don't actually use it for anything if you need something that works!
