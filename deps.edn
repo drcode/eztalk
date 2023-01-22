@@ -1,0 +1,2 @@
+{:deps {org.clojure/core.async {:mvn/version "1.6.673"}
+        io.djy/ezzmq           {:mvn/version "0.8.2"}}}
