@@ -2,17 +2,26 @@
   (:require [clojure.edn :as ed]
             [clojure.core.async :as as]
             [clojure.stacktrace :as st]
-            [ezzmq.core :as zm]))
+            [ezzmq.core :as zm])
+  (:import java.net.NetworkInterface))
+
+(defn get-ip []
+  (-> (->> (NetworkInterface/getNetworkInterfaces)
+           enumeration-seq
+           (map bean)
+           (mapcat :interfaceAddresses)
+           (map bean)
+           (filter :broadcast)
+           (filter #(= (.getClass (:address %)) java.net.Inet4Address)))
+      (nth 0)
+      (get :address)
+      .getHostAddress))
 
 (def eztalk-port 13245)
 
 (def kill-atoms (atom []))
 
 (def init-cmd "___init___")
-
-(defn extract-address [s]
-  (let [[_ addr] (re-matches #"tcp:\/\/(.*):.*" s)]
-    addr))
 
 (defn start
   ([fun other-address port]
@@ -23,7 +32,7 @@
                                      (zm/socket :req {:connect (str "tcp://" other-address ":" eztalk-port)})))
                :killed       (atom false)}]
      (when other-address
-       (zm/send-msg @(:other-socket node) (str init-cmd port))
+       (zm/send-msg @(:other-socket node) (str init-cmd (pr-str [(get-ip) port])))
        (zm/receive-msg @(:other-socket node) {:stringify true}))
      (swap! kill-atoms conj (:killed node))
      (when-not other-address
@@ -33,9 +42,9 @@
                                                    {:stringify true
                                                     :timeout   300})]
                         (if (= (apply str (take (count init-cmd) (first s))) init-cmd)
-                          (do (let [addr (extract-address (.getLastEndpoint (:my-socket node)))]
-                                (println "found other peer" addr)
-                                (reset! (:other-socket node) (zm/socket :req {:connect (str "tcp://" other-address ":" (apply str (drop (count init-cmd) (first s))))}))))
+                          (let [[addr other-port] (ed/read-string (apply str (drop (count init-cmd) (first s))))]
+                            (println "found other peer" addr)
+                            (reset! (:other-socket node) (zm/socket :req {:connect (str "tcp://" addr ":" other-port)})))
                           (fun (ed/read-string (first s))))
                         (zm/send-msg (:my-socket node) "gotit")))
                     (println "listening thread killed")))
