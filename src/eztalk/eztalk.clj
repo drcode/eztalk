@@ -14,7 +14,7 @@
     addr))
 
 (defn start
-  ([other-address fun port]
+  ([fun other-address port]
    (when (and (not other-address) (not= port eztalk-port))
      (throw (Exception. "currently, you must use the default eztalk port if you are not providing the address of another node")))
    (let [node {:my-socket    (zm/socket :rep {:bind (str "tcp://*:" port)})
@@ -44,8 +44,10 @@
      (fn [data]
        (zm/send-msg @(:other-socket node) (pr-str data)) 
        (zm/receive-msg @(:other-socket node) {:stringify true}))))
-  ([other-address fun]
-   (start other-address fun eztalk-port)))
+  ([fun other-address]
+   (start fun other-address eztalk-port))
+  ([fun]
+   (start fun nil)))
 
 (defmacro with-eztalk [& body]
   `(zm/with-new-context
@@ -58,13 +60,12 @@
 (defn test-all [] ;;this test is a little more complicated than explained in the README because both nodes are on the same machine
   (with-eztalk (let [node1 (atom nil)]
                  (as/thread (reset! node1
-                                    (start nil
-                                           (fn [data]
+                                    (start (fn [data]
                                              (println "node1 got:" data)))))
                  (Thread/sleep 100)
-                 (let [node2 (start "127.0.0.1"
-                                    (fn [data]
+                 (let [node2 (start (fn [data]
                                       (println "node2 got:" data))
+                                    "127.0.0.1"
                                     55555)]
                    (while (not @node1)
                      (Thread/sleep 100))
