@@ -1,6 +1,7 @@
 (ns eztalk.eztalk
   (:require [clojure.edn :as ed]
             [clojure.core.async :as as]
+            [clojure.stacktrace :as st]
             [ezzmq.core :as zm]))
 
 (def eztalk-port 13245)
@@ -32,8 +33,7 @@
                                                    {:stringify true
                                                     :timeout   300})]
                         (if (= (apply str (take (count init-cmd) (first s))) init-cmd)
-                          (do (assert (not other-address))
-                              (let [addr (extract-address (.getLastEndpoint (:my-socket node)))]
+                          (do (let [addr (extract-address (.getLastEndpoint (:my-socket node)))]
                                 (println "found other peer" addr)
                                 (reset! (:other-socket node) (zm/socket :req {:connect (str "tcp://" other-address ":" (apply str (drop (count init-cmd) (first s))))}))))
                           (fun (ed/read-string (first s))))
@@ -50,12 +50,14 @@
    (start fun nil)))
 
 (defmacro with-eztalk [& body]
-  `(zm/with-new-context
-     ~@body
-     (doseq [k# @kill-atoms]
-       (reset! k# true))
-     (reset! kill-atoms [])
-     (Thread/sleep 500)))
+  `(zm/with-new-context (try ~@body
+                             (catch Exception e#
+                               (println "socket exception")
+                               (st/print-stack-trace e#))
+                             (finally (doseq [k# @kill-atoms]
+                                        (reset! k# true))
+                                      (reset! kill-atoms [])
+                                      (Thread/sleep 500)))))
 
 (defn test-all [] ;;this test is a little more complicated than explained in the README because both nodes are on the same machine
   (with-eztalk (let [node1 (atom nil)]
